@@ -103,7 +103,12 @@ export function LiveLine({
     .filter(Boolean)
     .join(' · ');
   const current = (
-    <span className="live-line-current" id={labelId} role="status">
+    <span
+      className="live-line-current"
+      id={labelId}
+      role="status"
+      title={described ? [described, meta].filter(Boolean).join(' · ') : undefined}
+    >
       {described ? (
         <Markdown allowedElements={[]} unwrapDisallowed>
           {described}
