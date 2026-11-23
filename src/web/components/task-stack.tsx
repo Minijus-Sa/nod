@@ -164,7 +164,6 @@ export function TaskLine({
         ref={summary}
         className={`task-line-summary${linked ? ' task-line-linked' : ''}`}
         aria-expanded={expanded}
-        aria-haspopup="dialog"
         onClick={() => {
           if (expanded) setView(null);
           else show(count > 1 ? 'list' : open[0]!.id);
@@ -197,7 +196,7 @@ export function TaskLine({
       {expanded && (
         <div
           className="task-line-pop"
-          role="dialog"
+          role="group"
           aria-label={current ? current.title : 'Running tasks'}
           style={room ? { maxHeight: room } : undefined}
         >

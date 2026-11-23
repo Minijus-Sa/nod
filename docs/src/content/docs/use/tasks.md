@@ -41,7 +41,7 @@ Select **Rules** to ask Nod in chat to show the rules that apply to every task. 
 | **Done when**  | What finished looks like                                                          |
 | **Model**      | The model the task uses. Select **Change** to give this task its own model        |
 
-When Nod starts a task, a chip under its message says **Task started** with the task's title. The chip follows the task's [status](#statuses), such as **Needs you**, **Finishing**, **Task done**, **Task failed** or **Task stopped**. Select it to open the task or, once it's done, to jump to its answer.
+When Nod starts a task, a chip under its message says **Task started** with the task's title. The chip follows the task's [status](#statuses), such as **Needs you**, **Finishing**, **Task done**, **Task failed** or **Task stopped**. Select it while the task is active to open the task or, once it's done and has an answer, to jump to that answer.
 
 While tasks that started in the chat run, one line at the end of the chat sums them up, such as "2 tasks running · 1 needs you". It sits on the right of Nod's own status line, on its last line, and takes that line on its own when Nod isn't working on anything else. Select it to list the tasks, then select one to open its card. With one task, the card opens at once. The card shows the task's question when it needs you, its plan as a checklist with how many steps are done, **Details** for when it counts as done, **Reply** and **Stop**. Nod's status line stays on one line. Hover over it, or select it to open its steps, to read a long step in full.
 
