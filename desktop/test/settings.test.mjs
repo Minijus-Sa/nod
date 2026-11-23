@@ -9905,13 +9905,14 @@ const input = fs.readFileSync(0, 'utf8');
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, input }) + '\\n');
 const answers = ${JSON.stringify(answers)};
 const key = Object.keys(answers).find((prefix) => args.join(' ').startsWith(prefix));
-let answer = key ? answers[key] : { ok: true, data: args[0] === 'snapshot' ? { complete: true, tree: { role: 'window', name: 'Mail' } } : {} };
+let answer = key ? answers[key] : { ok: true, data: args[0] === 'snapshot' ? { complete: true, tree: { role: 'window', name: 'Mail' } } : args[0] === 'find' ? { matches: [] } : {} };
 if (Array.isArray(answer)) {
   const counter = ${JSON.stringify(log)} + '.' + key.replaceAll(' ', '_');
   const seen = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0;
   fs.writeFileSync(counter, String(seen + 1));
   answer = answer[Math.min(seen, answer.length - 1)];
 }
+if (args[0] === 'screenshot' && answer.ok) fs.writeFileSync(args.at(-1), 'png');
 process.stdout.write(JSON.stringify(answer));
 `,
     { mode: 0o755 },
@@ -10085,14 +10086,372 @@ test('computer use binds a long list only by the rows the step needs', async (t)
   const arrived = await inspect();
   const moved = await inspect();
   assert.equal(first.incomplete, true);
-  assert.match(JSON.stringify(first.tree), /New Message.*Message 7/);
-  assert.doesNotMatch(JSON.stringify(first.tree), /Message 8|Message 499/);
+  assert.match(first.context, /New Message[\s\S]*Message 7/);
+  assert.doesNotMatch(first.context, /Message 8|Message 499/);
   assert.equal(first.state, arrived.state);
   assert.notEqual(first.state, moved.state);
   await assert.rejects(inspect(), /no longer in the window/);
   const compose = await inspect();
   assert.equal(compose.incomplete, false);
-  assert.match(JSON.stringify(compose.tree), /Message 24 value/);
+  assert.match(compose.context, /Message 24 value/);
+});
+
+test('computer use checks a large window only around the control it acts on', async (t) => {
+  const page = (far, to, focused = false, twin = false) => ({
+    ok: true,
+    data: {
+      complete: true,
+      tree: {
+        role: 'window',
+        name: 'Workspace',
+        children: [
+          {
+            role: 'group',
+            name: 'Notes',
+            children: [
+              ...Array.from({ length: 300 }, (_, index) => ({
+                role: 'statictext',
+                name: `${index ? 'Note' : far} ${index} ${'x'.repeat(80)}`,
+              })),
+              ...(twin ? [{ role: 'button', name: 'Send' }] : []),
+            ],
+          },
+          {
+            role: 'group',
+            name: 'Message',
+            children: [
+              { role: 'textfield', name: 'To', value: to },
+              {
+                role: 'textarea',
+                name: 'Body',
+                value: 'See you Friday',
+                states: focused ? ['focused'] : [],
+              },
+              { role: 'button', name: 'Send' },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  const desktop = await fakeDesktop(t, {
+    snapshot: [
+      page('Note', 'ana@example.test'),
+      page('Changed note', 'ana@example.test'),
+      page('Note', 'bo@example.test'),
+      page('Note', 'ana@example.test', true),
+      page('Note', 'ana@example.test', false, true),
+    ],
+  });
+  const inspect = (control) =>
+    desktop.helper.request({ op: 'inspect', app: 'Notes', window: 'w-1', control });
+  const send = { role: 'button', name: 'Send' };
+  const first = await inspect(send);
+  assert.ok(first.context.length <= 12_000);
+  assert.match(first.context, /"Send"/);
+  assert.match(first.context, /"To" = "ana@example.test"/);
+  assert.match(first.context, /"Workspace"/);
+  assert.match(first.context, /more not shown/);
+  assert.match(first.context, /Note 299 /);
+  assert.doesNotMatch(first.context, /Note 0 /);
+  assert.equal(first.incomplete, true);
+  assert.equal((await inspect(send)).state, first.state);
+  assert.notEqual((await inspect(send)).state, first.state);
+  assert.match((await inspect()).context, /"Body" = "See you Friday"/);
+  await assert.rejects(inspect(send), /could not tell which part/);
+});
+
+test('computer use checks a grouped mail list around the row it acts on', async (t) => {
+  const groups = ['Today', 'Yesterday', 'Last week', 'Last month', 'Older'];
+  const inbox = (selectedRows) => ({
+    ok: true,
+    data: {
+      complete: true,
+      tree: {
+        role: 'window',
+        name: 'Inbox - Outlook',
+        children: [
+          { role: 'button', name: 'New mail' },
+          {
+            role: 'table',
+            name: 'Message list',
+            children: groups.map((group, groupIndex) => ({
+              role: 'group',
+              name: group,
+              children: Array.from({ length: 10 }, (_, index) => {
+                const number = groupIndex * 10 + index;
+                return {
+                  role: 'row',
+                  name: `Mail ${number} from sender${number}@example.test ${'preview text '.repeat(30)}`,
+                  states: [
+                    ...(selectedRows.includes(number) ? ['selected'] : []),
+                    ...(number === 37 ? ['focused'] : []),
+                  ],
+                };
+              }),
+            })),
+          },
+        ],
+      },
+    },
+  });
+  const desktop = await fakeDesktop(t, {
+    snapshot: [inbox([37]), inbox([37]), inbox([3, 37])],
+  });
+  const row = (await desktop.helper.request({ op: 'inspect', app: 'Outlook', window: 'w-1' }))
+    .context;
+  assert.ok(row.length <= 12_000);
+  assert.match(row, /Mail 37 from/);
+  const click = await desktop.helper.request({
+    op: 'inspect',
+    app: 'Outlook',
+    window: 'w-1',
+    control: {
+      role: 'row',
+      name: inbox([37]).data.tree.children[1].children[2].children[2].name,
+    },
+  });
+  assert.ok(click.context.length <= 12_000);
+  assert.match(click.context, /Mail 22 from/);
+  const both = (await desktop.helper.request({ op: 'inspect', app: 'Outlook', window: 'w-1' }))
+    .context;
+  assert.match(both, /Mail 3 from/);
+  assert.match(both, /Mail 37 from/);
+});
+
+test('computer use names the inner list as focused when a nested list has focus', async (t) => {
+  const outline = (focused) => ({
+    ok: true,
+    data: {
+      complete: true,
+      tree: {
+        role: 'window',
+        name: 'Projects',
+        children: [
+          {
+            role: 'outline',
+            name: 'Folders',
+            children: ['Inbox', 'Archive'].map((name) => ({
+              role: 'list',
+              name,
+              states: name === focused ? ['focused'] : [],
+              children: [{ role: 'row', name: `${name} item` }],
+            })),
+          },
+        ],
+      },
+    },
+  });
+  const desktop = await fakeDesktop(t, { snapshot: [outline('Inbox'), outline('Archive')] });
+  const inspect = () => desktop.helper.request({ op: 'inspect', app: 'Files', window: 'w-1' });
+  const inbox = await inspect();
+  assert.deepEqual(
+    inbox.focused.map((item) => item.name),
+    ['Inbox'],
+  );
+  assert.notEqual((await inspect()).focus, inbox.focus);
+});
+
+test('computer use treats a list whose cells all report focus as one focused control', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    snapshot: {
+      ok: true,
+      data: {
+        complete: true,
+        tree: {
+          role: 'window',
+          name: 'Inbox',
+          children: [
+            { role: 'textfield', name: 'To', value: '', states: ['focused'] },
+            {
+              role: 'table',
+              name: 'Messages',
+              children: Array.from({ length: 300 }, (_, index) => ({
+                role: 'row',
+                children: [{ role: 'cell', name: `Row ${index}`, states: ['focused'] }],
+              })),
+            },
+          ],
+        },
+      },
+    },
+  });
+  const inspected = await desktop.helper.request({ op: 'inspect', app: 'Mail', window: 'w-1' });
+  assert.deepEqual(
+    inspected.focused.map((item) => item.role),
+    ['textfield', 'table'],
+  );
+  assert.doesNotMatch(inspected.context, /Row 1/);
+});
+
+test('computer use keeps a window binding when another control turns on as the app comes forward', async (t) => {
+  const compose = (tools, send, to = 'ana@example.test') => ({
+    ok: true,
+    data: {
+      complete: true,
+      tree: {
+        role: 'window',
+        name: 'New Message',
+        children: [
+          { role: 'textfield', name: 'To', value: to },
+          { role: 'button', name: 'Writing Tools', states: tools ? [] : ['disabled'] },
+          { role: 'button', name: 'Send', states: send ? [] : ['disabled'] },
+        ],
+      },
+    },
+  });
+  const desktop = await fakeDesktop(t, {
+    snapshot: [
+      compose(false, true),
+      compose(true, true),
+      compose(true, false),
+      compose(true, true, 'bo@example.test'),
+    ],
+  });
+  const send = { role: 'button', name: 'Send' };
+  const inspect = () =>
+    desktop.helper.request({ op: 'inspect', app: 'Mail', window: 'w-1', control: send });
+  const background = await inspect();
+  assert.equal((await inspect()).state, background.state);
+  assert.equal((await inspect()).state, background.state);
+  assert.notEqual((await inspect()).state, background.state);
+});
+
+test('computer use reads a window again in front when its tree is not ready in the background', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    'list-windows': mailWindow,
+    snapshot: [
+      {
+        ok: false,
+        error: {
+          code: 'TIMEOUT',
+          message: 'Operation exceeded its deadline',
+          details: { kind: 'deadline' },
+          disposition: { delivery: 'not_delivered', retry: 'safe' },
+        },
+      },
+      { ok: true, data: { complete: true, tree: { role: 'window', name: 'Inbox' } } },
+    ],
+  });
+  const read = await desktop.helper.request({ op: 'snapshot', app: 'Mail', window: 'w-1' });
+  assert.equal(read.tree.name, 'Inbox');
+  const calls = await desktop.calls();
+  assert.equal(calls.length, 3);
+  assert.match(calls[0], /^snapshot --app Mail --window-id w-1 /);
+  assert.equal(calls[1], 'focus-window --app Mail --window-id w-1');
+  assert.match(calls[2], /^snapshot --app Mail --window-id w-1 /);
+});
+
+test('computer use never repeats an input that timed out after it was delivered', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    'list-windows': mailWindow,
+    click: {
+      ok: false,
+      error: {
+        code: 'TIMEOUT',
+        message: 'Operation exceeded its deadline',
+        details: { kind: 'deadline' },
+        disposition: { delivery: 'delivered_unverified', retry: 'unsafe' },
+      },
+    },
+  });
+  await assert.rejects(
+    desktop.helper.request({ op: 'press', ref: '@s1abcdef:e1', app: 'Mail', window: 'w-1' }),
+    /TIMEOUT/,
+  );
+  assert.deepEqual(await desktop.calls(), ['click @s1abcdef:e1']);
+});
+
+test('computer use brings a window forward when its control stays disabled in the background', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    'list-windows': mailWindow,
+    'click @s1abcdef:e1 --headed': { ok: true, data: {} },
+    click: {
+      ok: false,
+      error: {
+        code: 'TIMEOUT',
+        message: 'Target did not become actionable within the wait budget',
+        details: { kind: 'actionability_timeout' },
+        disposition: { delivery: 'not_delivered', retry: 'safe' },
+      },
+    },
+  });
+  await desktop.helper.request({ op: 'press', ref: '@s1abcdef:e1', app: 'Mail', window: 'w-1' });
+  assert.deepEqual(await desktop.calls(), [
+    'click @s1abcdef:e1',
+    'focus-window --app Mail --window-id w-1',
+    'click @s1abcdef:e1',
+    'click @s1abcdef:e1 --headed',
+  ]);
+});
+
+test('computer use lists hidden and minimized windows it can read and skips ones it cannot', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    'list-windows --app Obsidian': {
+      ok: true,
+      data: [
+        { id: 'w-backdrop', pid: 7, title: 'Untitled', accessible: false, visible: true },
+        { id: 'w-note', pid: 7, title: 'Note', accessible: true, visible: false, minimized: true },
+        { id: 'w-other', pid: 8, title: 'Other', accessible: true, visible: true },
+      ],
+    },
+  });
+  const { windows } = await desktop.helper.request({ op: 'windows', app: 'Obsidian', pid: 7 });
+  assert.deepEqual(windows, [{ id: 'w-note', title: 'Note', hidden: true }]);
+});
+
+test('computer use still lists apps when the frontmost app does not answer accessibility', async (t) => {
+  const desktop = await fakeDesktop(t, {
+    'list-apps': {
+      ok: true,
+      data: {
+        apps: [
+          {
+            pid: 7,
+            bundle_id: 'com.apple.iWork.Numbers',
+            name: 'Numbers',
+            presentation: 'foreground',
+          },
+          {
+            pid: 8,
+            bundle_id: 'com.toggl.daneel',
+            name: 'Toggl Track',
+            presentation: 'foreground',
+          },
+        ],
+      },
+    },
+    'list-windows --app Numbers': {
+      ok: true,
+      data: [{ id: 'w-7', pid: 7, title: 'Budget', accessible: true, visible: true }],
+    },
+    'list-windows': refused('PERM_DENIED', 'Accessibility surface read failed for AXFrontmost'),
+  });
+  const { apps } = await desktop.helper.request({ op: 'apps' });
+  assert.deepEqual(
+    apps.map((app) => app.name),
+    ['Numbers', 'Toggl Track'],
+  );
+});
+
+test('computer use takes a screenshot of a window too large to read completely', async (t) => {
+  const focused = (node) => ({ ok: true, data: { matches: [node], truncated: false } });
+  const desktop = await fakeDesktop(t, {
+    find: [
+      focused({ role: 'textfield', name: 'Search', states: ['focused'], path: ['window'] }),
+      focused({ role: 'textfield', states: ['focused', 'secure'], path: ['window'] }),
+      focused({ role: 'statictext', states: ['focused'], path: ['window', 'securetextfield'] }),
+      refused('TIMEOUT', 'Operation exceeded its deadline'),
+    ],
+    snapshot: { ok: true, data: { complete: false, truncated: true, tree: { role: 'window' } } },
+  });
+  const shoot = () =>
+    desktop.helper.request({ op: 'screenshot', app: 'Mail', window: 'w-1', noSecureFocus: true });
+  assert.ok((await shoot()).image);
+  await assert.rejects(shoot(), /password field has focus/);
+  await assert.rejects(shoot(), /password field has focus/);
+  await assert.rejects(shoot(), /TIMEOUT/);
+  assert.equal((await desktop.calls()).filter((call) => call.startsWith('screenshot')).length, 1);
 });
 
 test('computer use can create a first document without exposing the Apple or app menu', async (t) => {
@@ -10214,12 +10573,18 @@ test('computer use refuses a password focus or renamed control at delivery', asy
 test('computer use refuses a changed keyboard target even when window content stays the same', async (t) => {
   const tree = (selected) => ({
     role: 'window',
-    children: ['First', 'Second'].map((name, index) => ({
-      role: 'textfield',
-      name,
-      value: '',
-      states: index === selected ? ['focused'] : [],
-    })),
+    children: [
+      {
+        role: 'list',
+        name: 'Fields',
+        children: ['First', 'Second'].map((name, index) => ({
+          role: 'textfield',
+          name,
+          value: '',
+          states: index === selected ? ['focused'] : [],
+        })),
+      },
+    ],
   });
   const desktop = await fakeDesktop(
     t,
@@ -10403,7 +10768,7 @@ test('computer use pastes into a message body in front and restores the owner cl
   assert.deepEqual(await desktop.calls(), [
     'focus-window --app Mail --window-id w-1',
     'focus @s1abcdef:e1',
-    'snapshot --app Mail --window-id w-1 --max-depth 50',
+    'find --app Mail --window-id w-1 --state focused --limit 0 --timeout-ms 25000',
     'press cmd+v --app Mail --window-id w-1 --headed',
   ]);
   assert.equal(desktop.clipboard(), 'owner copied this');
