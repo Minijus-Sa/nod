@@ -3742,13 +3742,15 @@ test('compatible model discovery retains HTTP failures and private values throug
     });
 });
 
-test('Hostinger AI Router lists chat models with its per-hundred-token rates and rejects a refused key', async () => {
-  const { createPiModelBackend } = await import('../src/providers/pi/models.ts');
+test('Hostinger AI Router applies model output limits and prices, filters chat models, and rejects a refused key', async () => {
+  const { createPiModelBackend, createPiModelRuntime } =
+    await import('../src/providers/pi/models.ts');
   const { ModelAuthError } = await import('../src/ports/models.ts');
   const model = (id: string, endpoints: string[], output = ['text']) => ({
     id,
     name: id,
     context_length: 200000,
+    max_output_tokens: 4096,
     supported_parameters: ['tools', 'reasoning_effort'],
     supported_endpoints: endpoints,
     architecture: { input_modalities: ['text', 'image'], output_modalities: output },
@@ -3793,6 +3795,32 @@ test('Hostinger AI Router lists chat models with its per-hundred-token rates and
     cacheWrite: 1.65,
   }))
     assert.ok(Math.abs(spec.cost[rate]! - expected) < 1e-9, rate);
+  const { runtime, model: selected } = await createPiModelRuntime({
+    provider: 'hostinger',
+    method: 'api_key',
+    effort: 'off',
+    definition: models[0],
+    read: async () => ({ type: 'api_key', key: 'fixture-hostinger-key' }),
+  });
+  let requestedOutput: unknown;
+  const result = await runtime.completeSimple(
+    selected,
+    { messages: [{ role: 'user', content: 'Complete the synthetic task.', timestamp: 1 }] },
+    {
+      maxTokens: 32_768,
+      fetch: async (_input, init) => {
+        requestedOutput = JSON.parse(String(init?.body)).max_completion_tokens;
+        return new Response(
+          'data: {"choices":[{"index":0,"delta":{"content":"Synthetic result."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+          {
+            headers: { 'content-type': 'text/event-stream' },
+          },
+        );
+      },
+    },
+  );
+  assert.equal(result.stopReason, 'stop', result.errorMessage);
+  assert.equal(requestedOutput, 4096);
   await assert.rejects(
     backend.catalog('hostinger', 'api_key', { type: 'api_key', key: 'fixture-refused-key' }),
     (error) => error instanceof ModelAuthError && /Hostinger AI Router/.test(error.message),
@@ -4340,10 +4368,14 @@ describe('model connections', { skip: !process.env.TEST_DATABASE_URL }, () => {
       CLOUDFLARE_ACCOUNT_ID: 'ABCDEF0123456789ABCDEF0123456789',
       CLOUDFLARE_GATEWAY_ID: 'fixture-gateway',
     };
+    const definition = (await f.backend.catalog('openai', 'api_key')).find(
+      (model) => model.choice.id === 'gpt-6.1-sol',
+    )!;
     const backend = {
       ...f.backend,
-      catalog: (provider: import('../src/shared/models.ts').ModelProvider) =>
-        f.backend.catalog(provider, 'api_key'),
+      catalog: async (provider: import('../src/shared/models.ts').ModelProvider) => [
+        { ...definition, spec: { ...definition.spec, provider } },
+      ],
     };
     const owner = await f.create(
       'fixture-environment-owner',

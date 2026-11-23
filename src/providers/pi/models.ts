@@ -908,6 +908,7 @@ export function createPiModelBackend(options: { fetch?: typeof fetch } = {}): Mo
           id: z.string(),
           name: z.string(),
           context_length: z.number().positive(),
+          max_output_tokens: z.number().positive().nullable().optional(),
           supported_parameters: z.array(z.string()),
           supported_endpoints: z.array(z.string()).optional(),
           architecture: z.object({
@@ -967,6 +968,7 @@ export function createPiModelBackend(options: { fetch?: typeof fetch } = {}): Mo
             contextWindow: m.context_length,
             maxTokens:
               m.top_provider?.max_completion_tokens ??
+              m.max_output_tokens ??
               known?.maxTokens ??
               Math.min(32_768, Math.floor(m.context_length / 2)),
             cost: {
