@@ -625,6 +625,7 @@ export const approvalCases = inParts(
             };
             if (input.op === 'locate') return { bundle: app.bundle, name: app.name };
             if (input.op === 'apps') return { apps: [app] };
+            if (input.op === 'windows') return { windows: app.windows };
             if (input.op === 'permissions') return {};
             const tree = {
               role: 'window',
@@ -635,6 +636,7 @@ export const approvalCases = inParts(
             if (input.op === 'inspect')
               return {
                 tree,
+                context: JSON.stringify(tree),
                 state: createHash('sha256').update(JSON.stringify(tree)).digest('hex'),
               };
             desktopSteps.push(input.op);
