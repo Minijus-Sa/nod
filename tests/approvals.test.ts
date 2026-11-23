@@ -798,6 +798,41 @@ test('confirmation keeps copied page links visible without making them active', 
   );
 });
 
+test('confirmation keeps bold on checked values and escapes every other Markdown', async () => {
+  const question =
+    'Buy a one-way ticket for **EC 279** on **2 December, 11:37**? _Note_ # [review](https://outside.example.test) ** loose';
+  const communication = createCommunication({
+    pool: { query: async () => ({ rows: [] }) } as unknown as pg.Pool,
+    ownerId: 'synthetic-owner',
+    review: async () => ({ text: question, question, action: 'Buy the ticket' }),
+  });
+  const result = await communication.describe({
+    turn: { threadId: 'synthetic-thread', turnId: 'synthetic-turn' },
+    action: 'NOD_browser',
+    args: {
+      website: 'https://train.example.test',
+      step: 'click',
+      control: [{ role: 'button', name: 'Buy' }],
+    },
+    details: { pageText: 'EC 279 departs 11:37 on 2 December' },
+  });
+  const nodes = markdownNodes(result.question);
+  const strong = nodes
+    .filter((node) => node.type === 'strong')
+    .map((node) =>
+      (node.children as Array<{ value?: string }>).map((child) => child.value).join(''),
+    );
+  assert.deepEqual(strong, ['EC 279', '2 December, 11:37']);
+  assert.match(
+    visibleMarkdownText(result.question),
+    /_Note_ # review \(https:\/\/outside\.example\.test\) \*\* loose/,
+  );
+  assert.equal(
+    nodes.some((node) => ['emphasis', 'heading', 'link', 'html'].includes(node.type)),
+    false,
+  );
+});
+
 test('Gmail deletion names verified identity without model wording', async () => {
   const communication = createCommunication({
     pool: { query: async () => ({ rows: [] }) } as unknown as pg.Pool,
