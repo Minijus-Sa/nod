@@ -3742,6 +3742,63 @@ test('compatible model discovery retains HTTP failures and private values throug
     });
 });
 
+test('Hostinger AI Router lists chat models with its per-hundred-token rates and rejects a refused key', async () => {
+  const { createPiModelBackend } = await import('../src/providers/pi/models.ts');
+  const { ModelAuthError } = await import('../src/ports/models.ts');
+  const model = (id: string, endpoints: string[], output = ['text']) => ({
+    id,
+    name: id,
+    context_length: 200000,
+    supported_parameters: ['tools', 'reasoning_effort'],
+    supported_endpoints: endpoints,
+    architecture: { input_modalities: ['text', 'image'], output_modalities: output },
+    pricing: {
+      prompt: '0.000132',
+      completion: '0.00066',
+      input_cache_read: '0.0000132',
+      input_cache_write: '0.000165',
+    },
+  });
+  const backend = createPiModelBackend({
+    fetch: async (input, init) => {
+      assert.equal(String(input), 'https://router.hostinger.com/v1/models');
+      const key = new Headers(init?.headers).get('authorization');
+      if (key !== 'Bearer fixture-hostinger-key')
+        return Response.json({ error: 'invalid key' }, { status: 401 });
+      return Response.json({
+        data: [
+          model('fixture-chat', ['/v1/chat/completions', '/v1/messages']),
+          model('fixture-messages-only', ['/v1/messages']),
+          model('fixture-image', ['/v1/images/generations'], ['image']),
+          model('fixture-embedding', ['/v1/embeddings']),
+        ],
+      });
+    },
+  });
+  const models = await backend.catalog('hostinger', 'api_key', {
+    type: 'api_key',
+    key: 'fixture-hostinger-key',
+  });
+  assert.deepEqual(
+    models.map(({ choice }) => choice.id),
+    ['fixture-chat'],
+  );
+  const spec = models[0].spec as { baseUrl: string; api: string; cost: Record<string, number> };
+  assert.equal(spec.baseUrl, 'https://router.hostinger.com/v1');
+  assert.equal(spec.api, 'openai-completions');
+  for (const [rate, expected] of Object.entries({
+    input: 1.32,
+    output: 6.6,
+    cacheRead: 0.132,
+    cacheWrite: 1.65,
+  }))
+    assert.ok(Math.abs(spec.cost[rate]! - expected) < 1e-9, rate);
+  await assert.rejects(
+    backend.catalog('hostinger', 'api_key', { type: 'api_key', key: 'fixture-refused-key' }),
+    (error) => error instanceof ModelAuthError && /Hostinger AI Router/.test(error.message),
+  );
+});
+
 describe('model connections', { skip: !process.env.TEST_DATABASE_URL }, () => {
   async function fixture(t: import('node:test').TestContext) {
     const { createModelService } = await import('../src/server/models.ts');
