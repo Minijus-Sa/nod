@@ -88,7 +88,9 @@ export function TaskLine({
       if (!root.current?.contains(event.target as Node)) setView(null);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setView(null);
+      if (event.key !== 'Escape') return;
+      setView(null);
+      summary.current?.focus();
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
@@ -193,7 +195,12 @@ export function TaskLine({
         <ChevronUp size={14} aria-hidden="true" />
       </button>
       {expanded && (
-        <div className="task-line-pop" style={room ? { maxHeight: room } : undefined}>
+        <div
+          className="task-line-pop"
+          role="dialog"
+          aria-label={current ? current.title : 'Running tasks'}
+          style={room ? { maxHeight: room } : undefined}
+        >
           {current ? (
             card(current, () => setView(null), count > 1 ? () => setView('list') : undefined)
           ) : (
@@ -295,7 +302,7 @@ export function TaskStackCard({
             <button
               type="button"
               aria-expanded={details}
-              aria-controls={`task-details-${task.id}`}
+              aria-controls={details ? `task-details-${task.id}` : undefined}
               onClick={() => {
                 if (!details) captureAnalytics('task_action', { action: 'expand' });
                 setDetails(!details);

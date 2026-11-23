@@ -1384,6 +1384,9 @@ button.message-work:is(:hover, :focus-visible) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.chat-page .live-line[open] > summary > .live-line-current {
+  white-space: normal;
+}
 .task-stack-panel {
   --ink: var(--foreground);
   --hair: color-mix(in srgb, var(--foreground) 22%, transparent);

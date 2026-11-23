@@ -107,7 +107,9 @@ export function LiveLine({
       className="live-line-current"
       id={labelId}
       role="status"
-      title={described ? [described, meta].filter(Boolean).join(' · ') : undefined}
+      onPointerEnter={(event) => {
+        event.currentTarget.title = described ? (event.currentTarget.textContent ?? '') : '';
+      }}
     >
       {described ? (
         <Markdown allowedElements={[]} unwrapDisallowed>

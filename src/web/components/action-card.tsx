@@ -199,7 +199,7 @@ export function ApprovalChoiceCard({
   const ended = task && (stopped || taskStopped) && state !== 'working' && state !== 'done';
   const chosen = ended ? 2 : state === 'declined' ? 1 : 0;
   const stop = async () => {
-    if (!onStopTask || locked || stopping) return;
+    if (!onStopTask || stopping) return;
     setStopping(true);
     setStopError('');
     try {
@@ -230,7 +230,12 @@ export function ApprovalChoiceCard({
               type="button"
               className="choice-card-row"
               aria-disabled={locked || stopping}
-              onClick={() => void (index === 2 ? stop() : answer(index === 0, label))}
+              onClick={() => {
+                if (stopping) return;
+                setStopError('');
+                if (index === 2) void stop();
+                else void answer(index === 0, label);
+              }}
             >
               <ChoiceBadge index={index} />
               <ChoiceCopy label={stopping && index === 2 ? 'Stopping…' : label} />

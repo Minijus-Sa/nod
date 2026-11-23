@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Task previews in chat show what Nod is working on and what needs your attention. The **Scheduled** page holds open tasks, schedules and their recent runs. Select **New schedule** to open chat, where Nod helps you decide what to do and when.
+In chat, a chip under Nod's message and one tasks line at the end of the chat show what your tasks are doing and what needs your attention. The **Scheduled** page holds open tasks, schedules and their recent runs. Select **New schedule** to open chat, where Nod helps you decide what to do and when.
 
 Nod keeps quick answers, simple lookups and status questions in chat, including flight searches. It starts a saved task for substantial work, including multi-step work it can finish in one sitting, such as research across sources, checked comparisons or report creation, and for an outside wait, such as a person, a reply or an action elsewhere, or work you ask it to track. You never pick an execution mode: Nod starts the task itself and lets it finish the assigned work. Browsing a website, signing in, paying or using a desktop app always runs as its own task, with its own browser and questions.
 
@@ -41,9 +41,9 @@ Select **Rules** to ask Nod in chat to show the rules that apply to every task. 
 | **Done when**  | What finished looks like                                                          |
 | **Model**      | The model the task uses. Select **Change** to give this task its own model        |
 
-When Nod starts a task, a chip under its message says **Task started** with the task's title. The chip changes to **Needs you** when the task asks you something and to **Task done** when it finishes; select it to open the task or, once it's done, to jump to its answer.
+When Nod starts a task, a chip under its message says **Task started** with the task's title. The chip follows the task's [status](#statuses), such as **Needs you**, **Finishing**, **Task done**, **Task failed** or **Task stopped**. Select it to open the task or, once it's done, to jump to its answer.
 
-While tasks run, one line at the end of the chat sums them up, such as "2 tasks running · 1 needs you". It sits on the right of Nod's own status line, on its last line, and takes that line on its own when Nod isn't working on anything else. Select it to list the tasks, then select one to open its card. With one task, the card opens at once. The card shows the task's question when it needs you, its plan as a checklist with how many steps are done, **Details** for when it counts as done, **Reply** and **Stop**. Nod's status line stays on one line; hover over it to read a long step in full.
+While tasks that started in the chat run, one line at the end of the chat sums them up, such as "2 tasks running · 1 needs you". It sits on the right of Nod's own status line, on its last line, and takes that line on its own when Nod isn't working on anything else. Select it to list the tasks, then select one to open its card. With one task, the card opens at once. The card shows the task's question when it needs you, its plan as a checklist with how many steps are done, **Details** for when it counts as done, **Reply** and **Stop**. Nod's status line stays on one line. Hover over it, or select it to open its steps, to read a long step in full.
 
 When your message goes to a task, the status line's place shows that task's title and current step under your message. This happens when you reply to one of the task's messages or answer its question, or when Nod sends your message to the task. The task's progress stays there until it posts a message, finishes or needs you. Select it to open the task. When you start a new task, its progress stays on its card.
 
@@ -103,9 +103,9 @@ A finished card has **Schedule task**, which turns the same work into a [schedul
 
 ## Use tasks on mobile
 
-Mobile web uses the same compact previews. Open a preview to read the steps, reply or stop one task.
+Mobile web shows the same chip and tasks line, with a shorter summary such as "2 tasks · 1 needs you". Select the tasks line to open a task's card, read its steps, reply or stop it.
 
-![Compact task previews in mobile web chat.](../../../assets/screens/task-sessions-mobile.png)
+![Mobile web chat with a Task started chip and 2 tasks · 1 needs you next to Nod's status line.](../../../assets/screens/task-sessions-mobile.png)
 
 ## Telegram and WhatsApp without a task page
 

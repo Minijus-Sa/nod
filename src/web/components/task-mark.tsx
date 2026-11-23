@@ -12,7 +12,8 @@ export function TaskMark({
       viewBox="0 0 32 32"
       width={size}
       height={size}
-      aria-hidden="true"
+      role="img"
+      aria-label={status === 'needs_you' ? 'Needs you' : status === 'done' ? 'Done' : 'Working'}
     >
       {status === 'needs_you' ? (
         <>
